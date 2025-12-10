@@ -1,4 +1,4 @@
-# Encryption Service Backend
+# Encryption Service
 
 A Rust-based Internet Computer canister that provides production-grade AES-256-GCM encryption and decryption services.
 
@@ -93,6 +93,45 @@ dfx deploy encryption-service
 # Deploy to mainnet
 dfx deploy --network ic encryption-service
 ```
+
+## Cycle Costs
+
+This service is extremely cost-effective for encryption operations on the Internet Computer:
+
+### Per Operation Cost Estimate
+
+**For encrypting 1 KB of data:**
+
+- **Base update call fee**: 1,200,000 cycles
+- **Input data** (~1,064 bytes): ~2,128,000 cycles (2,000 cycles/byte)
+- **Random number generation** (`raw_rand()` inter-canister call): ~260,000 cycles (base fee)
+- **Computation** (AES-256-GCM + HKDF): ~10-50M cycles
+- **Total per encrypt operation**: ~13-53M cycles (~$0.000018-0.000072 USD)
+
+**For decrypting 1 KB of data:**
+
+- **Base update call fee**: 1,200,000 cycles
+- **Input data** (~1,092 bytes including encrypted structure): ~2,184,000 cycles (2,000 cycles/byte)
+- **Computation** (AES-256-GCM + HKDF): ~10-50M cycles
+- **Total per decrypt operation**: ~13-53M cycles (~$0.000018-0.000072 USD)
+
+### Volume Pricing Examples
+
+- **1,000 encryptions/day**: ~13-53 billion cycles/year (~$0.018-0.072 USD/year)
+- **10,000 encryptions/day**: ~130-530 billion cycles/year (~$0.18-0.72 USD/year)
+- **100,000 encryptions/day**: ~1.3-5.3 trillion cycles/year (~$1.76-7.16 USD/year)
+
+### Cost Breakdown
+
+- **Update call base fee**: 1.2M cycles (fixed per call)
+- **Ingress bytes**: 2K cycles per byte
+- **`raw_rand()` call** (encrypt only): 260K cycles for secure random IV generation
+- **No storage costs**: Service doesn't store data, only processes it
+- **Scales with data size**: Larger plaintexts increase ingress costs linearly
+
+**Note**: 1 trillion cycles = 1 XDR ≈ $1.35 USD (as of 2025)
+
+This is significantly cheaper than traditional cloud encryption services (e.g., AWS KMS charges ~$0.03 per 10,000 requests).
 
 ## Dependencies
 

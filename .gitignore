@@ -1,0 +1,27 @@
+# Rust
+target/
+Cargo.lock
+
+# Internet Computer
+.dfx/
+.env
+canister_ids.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.wasm
+*.did.d.ts
+*.did.js
+
+# Logs
+*.log

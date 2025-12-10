@@ -1,11 +1,23 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
 use candid::{CandidType, Deserialize};
 use hkdf::Hkdf;
-use ic_cdk_macros::{query, update};
+use ic_cdk_macros::update;
 use sha2::Sha256;
+
+// Custom getrandom implementation for IC
+// This is required because the default getrandom doesn't support wasm32-unknown-unknown
+use getrandom::register_custom_getrandom;
+
+fn custom_getrandom(_buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    // This function should never be called since we use IC's raw_rand() API directly
+    // If it is called, return an error
+    Err(getrandom::Error::UNSUPPORTED)
+}
+
+register_custom_getrandom!(custom_getrandom);
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct EncryptedData {
@@ -51,7 +63,7 @@ fn derive_master_key(canister_id: &[u8], certified_data_snapshot: &[u8]) -> Resu
     // Perform HKDF-Extract and HKDF-Expand
     let hk = Hkdf::<Sha256>::new(Some(salt), &ikm);
     let mut master_key = [0u8; 32];
-    hk.expand(info, &master_key)
+    hk.expand(info, &mut master_key)
         .map_err(|e| format!("HKDF expansion failed: {:?}", e))?;
 
     Ok(master_key)
@@ -78,7 +90,7 @@ fn derive_master_key(canister_id: &[u8], certified_data_snapshot: &[u8]) -> Resu
 /// - The certified data snapshot is stored to enable deterministic key rederivation
 /// - The caller's canister ID is automatically retrieved and used for key derivation
 #[update]
-fn encrypt(
+async fn encrypt(
     certified_data_snapshot: Vec<u8>,
     plaintext: Vec<u8>,
 ) -> EncryptResult {
@@ -98,9 +110,25 @@ fn encrypt(
         Err(e) => return EncryptResult::Err(format!("Cipher initialization failed: {:?}", e)),
     };
 
-    // Step 4: Generate random 96-bit (12-byte) nonce/IV
+    // Step 4: Generate random 96-bit (12-byte) nonce/IV using IC's random number generator
     // This is the recommended nonce size for AES-GCM
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let random_bytes = match ic_cdk::api::management_canister::main::raw_rand().await {
+        Ok((bytes,)) => bytes,
+        Err((code, msg)) => {
+            return EncryptResult::Err(format!(
+                "Failed to generate random bytes: {:?} - {}",
+                code, msg
+            ))
+        }
+    };
+
+    // Use the first 12 bytes for the nonce
+    if random_bytes.len() < 12 {
+        return EncryptResult::Err("Insufficient random bytes generated".to_string());
+    }
+    let mut nonce_bytes = [0u8; 12];
+    nonce_bytes.copy_from_slice(&random_bytes[..12]);
+    let nonce = Nonce::from_slice(&nonce_bytes);
 
     // Step 5: Encrypt the plaintext
     // AES-GCM returns ciphertext || authentication_tag (last 16 bytes are the tag)

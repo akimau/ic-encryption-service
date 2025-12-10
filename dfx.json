@@ -1,0 +1,19 @@
+{
+  "canisters": {
+    "encryption-service": {
+      "type": "rust",
+      "package": "encryption-service",
+      "candid": "encryption_service.did",
+      "build": "cargo build --target wasm32-unknown-unknown --release --package encryption-service",
+      "wasm": "target/wasm32-unknown-unknown/release/encryption_service.wasm"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
