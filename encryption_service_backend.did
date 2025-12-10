@@ -1,0 +1,26 @@
+type EncryptedData = record {
+    ciphertext : blob;
+    iv : blob;
+    tag : blob;
+    certified_data_snapshot : blob;
+};
+
+type EncryptResult = variant {
+    Ok : EncryptedData;
+    Err : text;
+};
+
+type DecryptResult = variant {
+    Ok : blob;
+    Err : text;
+};
+
+service : {
+    /// Encrypts plaintext data using AES-256-GCM
+    /// The caller's canister ID is automatically retrieved and used for key derivation
+    encrypt : (certified_data_snapshot: blob, plaintext: blob) -> (EncryptResult);
+
+    /// Decrypts ciphertext data using AES-256-GCM
+    /// The caller's canister ID is automatically retrieved and must match the one used during encryption
+    decrypt : (encrypted_data: EncryptedData) -> (DecryptResult);
+}
