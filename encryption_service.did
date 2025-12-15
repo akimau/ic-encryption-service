@@ -15,12 +15,36 @@ type DecryptResult = variant {
     Err : text;
 };
 
+type ManagementResult = variant {
+    Ok;
+    Err : text;
+};
+
+type GetWhitelistResult = variant {
+    Ok : vec principal;
+    Err : text;
+};
+
 service : {
     /// Encrypts plaintext data using AES-256-GCM
     /// The caller's canister ID is automatically retrieved and used for key derivation
+    /// Only whitelisted principals can call this method
     encrypt : (certified_data_snapshot: blob, plaintext: blob) -> (EncryptResult);
 
     /// Decrypts ciphertext data using AES-256-GCM
     /// The caller's canister ID is automatically retrieved and must match the one used during encryption
+    /// Only whitelisted principals can call this method
     decrypt : (encrypted_data: EncryptedData) -> (DecryptResult);
+
+    /// Add a principal to the whitelist (only owner can call)
+    add_principal : (principal) -> (ManagementResult);
+
+    /// Remove a principal from the whitelist (only owner can call)
+    remove_principal : (principal) -> (ManagementResult);
+
+    /// Get the list of whitelisted principals (only owner can call)
+    get_whitelisted_principals : () -> (GetWhitelistResult) query;
+
+    /// Get the owner principal (anyone can call)
+    get_owner : () -> (opt principal) query;
 }
