@@ -17,10 +17,76 @@ This service provides secure encryption/decryption using:
 - ✅ **Random IV generation**: Each encryption uses a unique 96-bit initialization vector
 - ✅ **Deterministic key derivation**: Same inputs always produce the same key
 - ✅ **Certified data binding**: Keys are tied to specific certified data states
+- ✅ **Authorization & Access Control**: Whitelist-based access control with owner management
 
 ## API
 
-### `encrypt`
+### Authorization & Access Control
+
+The encryption service implements a whitelist-based authorization system:
+
+- **Owner**: Set during canister initialization (the principal that deploys the canister)
+- **Whitelist**: A list of canister principals authorized to use the encryption/decryption services
+- Only whitelisted principals can call `encrypt` and `decrypt`
+- Only the owner can manage the whitelist
+
+### Management Functions
+
+#### `get_owner`
+
+Returns the owner principal of the canister.
+
+```candid
+get_owner : () -> (opt principal) query
+```
+
+**Returns:** The owner principal, or `None` if not set.
+
+#### `add_principal`
+
+Adds a principal to the whitelist (owner only).
+
+```candid
+add_principal : (principal) -> (ManagementResult)
+```
+
+**Parameters:**
+- `principal`: The canister principal to whitelist
+
+**Returns:**
+- `Ok`: Principal added successfully
+- `Err(text)`: Error message if caller is not the owner
+
+#### `remove_principal`
+
+Removes a principal from the whitelist (owner only).
+
+```candid
+remove_principal : (principal) -> (ManagementResult)
+```
+
+**Parameters:**
+- `principal`: The canister principal to remove from whitelist
+
+**Returns:**
+- `Ok`: Principal removed successfully
+- `Err(text)`: Error message if caller is not the owner or principal not found
+
+#### `get_whitelisted_principals`
+
+Returns the list of whitelisted principals (owner only).
+
+```candid
+get_whitelisted_principals : () -> (GetWhitelistResult) query
+```
+
+**Returns:**
+- `Ok(vec principal)`: List of whitelisted principals
+- `Err(text)`: Error message if caller is not the owner
+
+### Encryption Functions
+
+#### `encrypt`
 
 Encrypts plaintext data using AES-256-GCM.
 
@@ -36,11 +102,11 @@ encrypt : (certified_data_snapshot: blob, plaintext: blob) -> (EncryptResult)
 **Returns:**
 
 - `Ok(EncryptedData)`: Contains ciphertext, IV, authentication tag, and certified data snapshot
-- `Err(text)`: Error message if encryption fails
+- `Err(text)`: Error message if encryption fails or caller is not whitelisted
 
-**Note:** The caller's canister ID is automatically retrieved using `ic_cdk::api::caller()` and used for key derivation.
+**Note:** The caller's canister ID is automatically retrieved using `ic_cdk::api::caller()` and used for key derivation. Only whitelisted principals can call this method.
 
-### `decrypt`
+#### `decrypt`
 
 Decrypts ciphertext data using AES-256-GCM.
 
@@ -55,9 +121,9 @@ decrypt : (encrypted_data: EncryptedData) -> (DecryptResult)
 **Returns:**
 
 - `Ok(blob)`: The decrypted plaintext
-- `Err(text)`: Error message if decryption or authentication fails
+- `Err(text)`: Error message if decryption or authentication fails, or caller is not whitelisted
 
-**Note:** The caller's canister ID is automatically retrieved and must match the canister that performed the encryption.
+**Note:** The caller's canister ID is automatically retrieved and must match the canister that performed the encryption. Only whitelisted principals can call this method.
 
 ## Security Notes
 
@@ -141,13 +207,59 @@ This is significantly cheaper than traditional cloud encryption services (e.g., 
 - `ic-cdk` (0.15): Internet Computer Canister Development Kit
 - `candid` (0.10): Candid serialization
 
+## Usage Example
+
+### 1. Deploy the canister
+
+```bash
+dfx deploy encryption-service
+```
+
+The deploying principal automatically becomes the owner.
+
+### 2. Whitelist a canister principal
+
+```bash
+# Add a canister to the whitelist (replace with actual principal)
+dfx canister call encryption-service add_principal '(principal "aaaaa-aa")'
+```
+
+### 3. View whitelisted principals
+
+```bash
+dfx canister call encryption-service get_whitelisted_principals
+```
+
+### 4. Use encryption/decryption (from a whitelisted canister)
+
+```bash
+# Encrypt data
+dfx canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
+
+# Decrypt data (using the returned EncryptedData)
+dfx canister call encryption-service decrypt '(record {
+  ciphertext = blob "...";
+  iv = blob "...";
+  tag = blob "...";
+  certified_data_snapshot = blob "certified-data"
+})'
+```
+
+### 5. Remove a principal from the whitelist
+
+```bash
+dfx canister call encryption-service remove_principal '(principal "aaaaa-aa")'
+```
+
 ## Testing
 
 ```bash
 # Run Rust unit tests
 cargo test --target wasm32-unknown-unknown
 
-# Test via dfx
+# Test authorization flow
+dfx canister call encryption-service get_owner
+dfx canister call encryption-service add_principal '(principal "your-canister-id")'
 dfx canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
 ```
 

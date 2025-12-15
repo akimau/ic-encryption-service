@@ -2,10 +2,12 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
-use candid::{CandidType, Deserialize};
+use candid::{CandidType, Deserialize, Principal};
 use hkdf::Hkdf;
-use ic_cdk_macros::update;
+use ic_cdk_macros::{init, query, update};
 use sha2::Sha256;
+use std::cell::RefCell;
+use std::collections::HashSet;
 
 // Custom getrandom implementation for IC
 // This is required because the default getrandom doesn't support wasm32-unknown-unknown
@@ -18,6 +20,17 @@ fn custom_getrandom(_buf: &mut [u8]) -> Result<(), getrandom::Error> {
 }
 
 register_custom_getrandom!(custom_getrandom);
+
+// State management for authorization
+thread_local! {
+    static STATE: RefCell<State> = RefCell::new(State::default());
+}
+
+#[derive(Default)]
+struct State {
+    owner: Option<Principal>,
+    whitelisted_principals: HashSet<Principal>,
+}
 
 #[derive(CandidType, Deserialize, Clone)]
 pub struct EncryptedData {
@@ -37,6 +50,92 @@ pub enum EncryptResult {
 pub enum DecryptResult {
     Ok(Vec<u8>),
     Err(String),
+}
+
+/// Initialize the canister with the owner principal
+/// This is called once during canister deployment
+#[init]
+fn init() {
+    let caller = ic_cdk::api::caller();
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.owner = Some(caller);
+    });
+}
+
+/// Check if the caller is the owner
+fn is_owner(principal: &Principal) -> bool {
+    STATE.with(|state| {
+        let state = state.borrow();
+        state.owner.as_ref() == Some(principal)
+    })
+}
+
+/// Check if the caller is whitelisted
+fn is_whitelisted(principal: &Principal) -> bool {
+    STATE.with(|state| {
+        let state = state.borrow();
+        state.whitelisted_principals.contains(principal)
+    })
+}
+
+/// Add a principal to the whitelist (only owner can call this)
+#[update]
+fn add_principal(principal: Principal) -> Result<(), String> {
+    let caller = ic_cdk::api::caller();
+
+    if !is_owner(&caller) {
+        return Err("Only the canister owner can add principals to the whitelist".to_string());
+    }
+
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.whitelisted_principals.insert(principal);
+    });
+
+    Ok(())
+}
+
+/// Remove a principal from the whitelist (only owner can call this)
+#[update]
+fn remove_principal(principal: Principal) -> Result<(), String> {
+    let caller = ic_cdk::api::caller();
+
+    if !is_owner(&caller) {
+        return Err("Only the canister owner can remove principals from the whitelist".to_string());
+    }
+
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if !state.whitelisted_principals.remove(&principal) {
+            return Err("Principal not found in whitelist".to_string());
+        }
+        Ok(())
+    })
+}
+
+/// Get the list of whitelisted principals (only owner can call this)
+#[query]
+fn get_whitelisted_principals() -> Result<Vec<Principal>, String> {
+    let caller = ic_cdk::api::caller();
+
+    if !is_owner(&caller) {
+        return Err("Only the canister owner can view the whitelist".to_string());
+    }
+
+    STATE.with(|state| {
+        let state = state.borrow();
+        Ok(state.whitelisted_principals.iter().cloned().collect())
+    })
+}
+
+/// Get the owner principal (query method, anyone can call)
+#[query]
+fn get_owner() -> Option<Principal> {
+    STATE.with(|state| {
+        let state = state.borrow();
+        state.owner
+    })
 }
 
 /// Derives a 256-bit master key using HKDF-SHA256
@@ -94,8 +193,16 @@ async fn encrypt(
     certified_data_snapshot: Vec<u8>,
     plaintext: Vec<u8>,
 ) -> EncryptResult {
-    // Step 1: Get the caller's canister ID
+    // Step 1: Get the caller's canister ID and check authorization
     let caller = ic_cdk::api::caller();
+
+    // Check if caller is whitelisted
+    if !is_whitelisted(&caller) {
+        return EncryptResult::Err(
+            "Unauthorized: caller is not whitelisted to use this service".to_string()
+        );
+    }
+
     let canister_id = caller.as_slice();
 
     // Step 2: Derive the master key using HKDF
@@ -173,8 +280,16 @@ async fn encrypt(
 /// - The caller's canister ID is automatically retrieved and must match the one used during encryption
 #[update]
 fn decrypt(encrypted_data: EncryptedData) -> DecryptResult {
-    // Step 1: Get the caller's canister ID
+    // Step 1: Get the caller's canister ID and check authorization
     let caller = ic_cdk::api::caller();
+
+    // Check if caller is whitelisted
+    if !is_whitelisted(&caller) {
+        return DecryptResult::Err(
+            "Unauthorized: caller is not whitelisted to use this service".to_string()
+        );
+    }
+
     let canister_id = caller.as_slice();
 
     // Step 2: Derive the master key using the stored certified data snapshot
