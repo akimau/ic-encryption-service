@@ -6,6 +6,13 @@
       "candid": "encryption_service.did",
       "build": "cargo build --target wasm32-unknown-unknown --release --package encryption-service",
       "wasm": "target/wasm32-unknown-unknown/release/encryption_service.wasm"
+    },
+    "encryption-service-staging": {
+      "type": "rust",
+      "package": "encryption-service",
+      "candid": "encryption_service.did",
+      "build": "cargo build --target wasm32-unknown-unknown --release --package encryption-service",
+      "wasm": "target/wasm32-unknown-unknown/release/encryption_service.wasm"
     }
   },
   "defaults": {
