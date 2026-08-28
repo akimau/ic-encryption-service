@@ -3,9 +3,9 @@ target/
 Cargo.lock
 
 # Internet Computer
-.dfx/
+.icp/cache/
+.icp/data/mappings/local.ids.json
 .env
-canister_ids.json
 
 # IDEs
 .vscode/

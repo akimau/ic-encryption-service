@@ -1,0 +1,18 @@
+canisters:
+  - name: encryption-service
+    recipe:
+      type: "@dfinity/rust@v3.3.0"
+      configuration:
+        candid: encryption_service.did
+
+networks:
+  - name: local
+    mode: connected
+    url: http://localhost:4943
+    root-key: fetch
+
+environments:
+  - name: staging
+    network: ic
+    canisters:
+      - encryption-service

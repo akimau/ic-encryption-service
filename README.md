@@ -151,14 +151,20 @@ decrypt : (encrypted_data: EncryptedData) -> (DecryptResult)
 
 ```bash
 # Build the encryption service
-dfx build encryption-service
+icp build encryption-service
 
 # Deploy locally
-dfx deploy encryption-service
+icp deploy encryption-service
 
-# Deploy to mainnet
-dfx deploy --network ic encryption-service
+# Deploy to staging
+icp deploy -e staging encryption-service
+
+# Deploy to production on mainnet
+icp deploy -e ic encryption-service
 ```
+
+The production and staging environments retain their existing canister IDs in
+`.icp/data/mappings/`.
 
 ## Cycle Costs
 
@@ -212,7 +218,7 @@ This is significantly cheaper than traditional cloud encryption services (e.g., 
 ### 1. Deploy the canister
 
 ```bash
-dfx deploy encryption-service
+icp deploy encryption-service
 ```
 
 The deploying principal automatically becomes the owner.
@@ -221,23 +227,23 @@ The deploying principal automatically becomes the owner.
 
 ```bash
 # Add a canister to the whitelist (replace with actual principal)
-dfx canister call encryption-service add_principal '(principal "aaaaa-aa")'
+icp canister call encryption-service add_principal '(principal "aaaaa-aa")'
 ```
 
 ### 3. View whitelisted principals
 
 ```bash
-dfx canister call encryption-service get_whitelisted_principals
+icp canister call encryption-service get_whitelisted_principals
 ```
 
 ### 4. Use encryption/decryption (from a whitelisted canister)
 
 ```bash
 # Encrypt data
-dfx canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
+icp canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
 
 # Decrypt data (using the returned EncryptedData)
-dfx canister call encryption-service decrypt '(record {
+icp canister call encryption-service decrypt '(record {
   ciphertext = blob "...";
   iv = blob "...";
   tag = blob "...";
@@ -248,19 +254,19 @@ dfx canister call encryption-service decrypt '(record {
 ### 5. Remove a principal from the whitelist
 
 ```bash
-dfx canister call encryption-service remove_principal '(principal "aaaaa-aa")'
+icp canister call encryption-service remove_principal '(principal "aaaaa-aa")'
 ```
 
 ## Testing
 
 ```bash
 # Run Rust unit tests
-cargo test --target wasm32-unknown-unknown
+cargo test
 
 # Test authorization flow
-dfx canister call encryption-service get_owner
-dfx canister call encryption-service add_principal '(principal "your-canister-id")'
-dfx canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
+icp canister call encryption-service get_owner
+icp canister call encryption-service add_principal '(principal "your-canister-id")'
+icp canister call encryption-service encrypt '(blob "certified-data", blob "plaintext")'
 ```
 
 ## License
